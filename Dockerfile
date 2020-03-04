@@ -1,5 +1,6 @@
 # Pull a pre-built alpine docker image with nginx and python3 installed
-FROM tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7
+#FROM tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7
+FROM python:3.7-alpine
 
 # Set the port on which the app runs; make both values the same.
 #
@@ -7,11 +8,12 @@ FROM tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7
 # portal, navigate to the Applications Settings blade, and create a setting named
 # WEBSITES_PORT with a value that matches the port here (the Azure default is 80).
 # You can also create a setting through the App Service Extension in VS Code.
-ENV LISTEN_PORT=5000
-EXPOSE 5000
+#ENV LISTEN_PORT=5000
+#EXPOSE 5000
+EXPOSE 80
 
 # Indicate where uwsgi.ini lives
-ENV UWSGI_INI uwsgi.ini
+#ENV UWSGI_INI uwsgi.ini
 
 # Tell nginx where static files live. Typically, developers place static files for
 # multiple apps in a shared folder, but for the purposes here we can use the one
@@ -26,9 +28,24 @@ WORKDIR /hello_app
 # Copy the app contents to the image
 COPY . /hello_app
 
+# Add gcc to be able to install psutils and then opencensus-azure
+RUN apk add --no-cache --virtual .build-deps gcc musl-dev libc-dev
+
+# Solves issue for linux/types.h: No such file or directory for psutils
+RUN apk add linux-headers
+RUN pip install --no-cache-dir psutil
+
 # If you have additional requirements beyond Flask (which is included in the
 # base image), generate a requirements.txt file with pip freeze and uncomment
 # the next three lines.
-#COPY requirements.txt /
-#RUN pip install --no-cache-dir -U pip
-#RUN pip install --no-cache-dir -r /requirements.txt
+COPY requirements.txt /
+RUN pip install --no-cache-dir -U pip
+RUN pip install --no-cache-dir -r /requirements.txt
+
+# Insert Azure Connection String as Environment Variable
+ENV APPLICATIONINSIGHTS_CONNECTION_STRING InstrumentationKey=<instrumentation_key>
+
+#RUN mkdir -p /root/.opencensus
+#RUN chmod 777 /root/.opencensus
+
+CMD ["gunicorn","-b 0.0.0.0:80", "-w 4", "hello_app.webapp:app"]
